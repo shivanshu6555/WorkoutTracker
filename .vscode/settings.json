@@ -1,0 +1,4 @@
+{
+    "appService.defaultWebAppToDeploy": "/subscriptions/3fdec7d6-21f4-4f15-aa9f-7c20ac522eca/resourceGroups/WorkoutTracker-RG/providers/Microsoft.Web/sites/WorkoutTracker-api-shivanshu",
+    "appService.deploySubpath": "publish"
+}

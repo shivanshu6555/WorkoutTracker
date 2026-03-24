@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WorkoutTracker.Models;
 
@@ -11,9 +12,11 @@ using WorkoutTracker.Models;
 namespace WorkoutTracker.Migrations
 {
     [DbContext(typeof(WorkoutDBContext))]
-    partial class WorkoutDBContextModelSnapshot : ModelSnapshot
+    [Migration("20260324154105_updatemig2")]
+    partial class updatemig2
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

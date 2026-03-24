@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WorkoutTracker.Models;
 
@@ -11,9 +12,11 @@ using WorkoutTracker.Models;
 namespace WorkoutTracker.Migrations
 {
     [DbContext(typeof(WorkoutDBContext))]
-    partial class WorkoutDBContextModelSnapshot : ModelSnapshot
+    [Migration("20260324152802_updatemig1")]
+    partial class updatemig1
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -211,14 +214,6 @@ namespace WorkoutTracker.Migrations
                         },
                         new
                         {
-                            Id = 32,
-                            MuscleGroup = "Shoulders",
-                            Name = "Shoulder Press Machine",
-                            Type = 1,
-                            WeightIncrement = 5m
-                        },
-                        new
-                        {
                             Id = 21,
                             MuscleGroup = "Chest",
                             Name = "Barbell Bench Press",
@@ -254,14 +249,6 @@ namespace WorkoutTracker.Migrations
                             Id = 25,
                             MuscleGroup = "Chest",
                             Name = "Dumbbell Bench Press",
-                            Type = 1,
-                            WeightIncrement = 5m
-                        },
-                        new
-                        {
-                            Id = 31,
-                            MuscleGroup = "Chest",
-                            Name = "Incline Dumbbell Press",
                             Type = 1,
                             WeightIncrement = 5m
                         },
