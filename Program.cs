@@ -236,7 +236,7 @@ app.MapPost("/api/register", async (AuthRequest req, WorkoutDBContext db) =>
 
 
 // 2. LOGIN ENDPOINT
-app.MapPost("/api/login", async (AuthRequest req, builder, WorkoutDBContext db) =>
+app.MapPost("/api/login", async (AuthRequest req, IConfiguration config, WorkoutDBContext db) =>
 {
     var phone = req.PhoneNumber.Replace(" ", "");
     var user = await db.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phone);
@@ -247,7 +247,8 @@ app.MapPost("/api/login", async (AuthRequest req, builder, WorkoutDBContext db) 
 
     // Generate the 30-Day JWT "Wristband"
     var tokenHandler = new JwtSecurityTokenHandler();
-    var key = Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:SecretKey"]!);
+    // Notice we use 'config' here instead of 'builder.Configuration'
+    var key = Encoding.UTF8.GetBytes(config["JwtSettings:SecretKey"]!);
     var tokenDescriptor = new SecurityTokenDescriptor
     {
         Subject = new ClaimsIdentity(new[]
@@ -256,8 +257,8 @@ app.MapPost("/api/login", async (AuthRequest req, builder, WorkoutDBContext db) 
             new Claim(ClaimTypes.MobilePhone, user.PhoneNumber)
         }),
         Expires = DateTime.UtcNow.AddDays(30), // Keeps them logged in for a month
-        Issuer = builder.Configuration["JwtSettings:Issuer"],
-        Audience = builder.Configuration["JwtSettings:Audience"],
+        Issuer = config["JwtSettings:Issuer"],
+        Audience = config["JwtSettings:Audience"],
         SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
     };
 
