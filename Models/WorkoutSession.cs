@@ -11,6 +11,10 @@
         // For overall session notes like "Felt tired today"
         public string? OverallNotes { get; set; }
 
+        // NEW: Foreign Key linking to the User
+        public int UserId { get; set; }
+        public User User { get; set; } = null!;
+
         // Navigation Property
         public ICollection<WorkoutSet> Sets { get; set; } = new List<WorkoutSet>();
     }

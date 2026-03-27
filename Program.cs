@@ -1,5 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using WorkoutTracker.Models;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +17,26 @@ builder.Services.AddCors(options =>
 });
 builder.Services.AddOpenApi();
 builder.Services.AddDbContext<WorkoutDBContext>(options => options.UseAzureSql(builder.Configuration.GetConnectionString("DevConnection")));
+// --- JWT AUTHENTICATION SETUP ---
+var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+var secretKey = jwtSettings["SecretKey"];
+
+builder.Services.AddAuthentication("Bearer")
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSettings["Issuer"],
+            ValidAudience = jwtSettings["Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey!))
+        };
+    });
+builder.Services.AddAuthorization();
+// --------------------------------
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -23,6 +47,8 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
+app.UseAuthentication(); // NEW
+app.UseAuthorization();  // NEW
 app.UseCors();
 
 var api = app.MapGroup("/api");
@@ -63,7 +89,7 @@ api.MapPost("/sessions", async (StartSessionRequest req, WorkoutDBContext db) =>
     await db.SaveChangesAsync();
 
     return Results.Created($"/api/sessions/{session.Id}", session);
-});
+}).RequireAuthorization();
 
 // 3. Log a set
 api.MapPost("/sessions/{sessionId:int}/sets", async (int sessionId, LogSetRequest req, WorkoutDBContext db) =>
@@ -89,7 +115,7 @@ api.MapPost("/sessions/{sessionId:int}/sets", async (int sessionId, LogSetReques
     await db.SaveChangesAsync();
 
     return Results.Ok(newSet);
-});
+}).RequireAuthorization();
 
 // 4. Get last session's sets for an exercise
 api.MapGet("/exercises/{exerciseId:int}/history", async (int exerciseId, WorkoutDBContext db) =>
@@ -184,6 +210,64 @@ api.MapPost("/import-history", async (List<BulkImportSession> history, WorkoutDB
     return Results.Ok($"Successfully imported {history.Count} sessions and {setsImported} sets!");
 });
 
+// Define the shape of the login request
+
+// 1. REGISTER ENDPOINT
+app.MapPost("/api/register", async (AuthRequest req, WorkoutDBContext db) =>
+{
+    // Normalize phone number by removing spaces
+    var phone = req.PhoneNumber.Replace(" ", "");
+
+    if (await db.Users.AnyAsync(u => u.PhoneNumber == phone))
+        return Results.BadRequest("Phone number already registered.");
+
+    var user = new User
+    {
+        PhoneNumber = phone,
+        // BCrypt magically handles the salt and hashing!
+        PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password)
+    };
+
+    db.Users.Add(user);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { message = "Registration successful!" });
+});
+
+
+// 2. LOGIN ENDPOINT
+app.MapPost("/api/login", async (AuthRequest req, builder, WorkoutDBContext db) =>
+{
+    var phone = req.PhoneNumber.Replace(" ", "");
+    var user = await db.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phone);
+
+    // Verify the user exists and the password matches the hash
+    if (user == null || !BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
+        return Results.Unauthorized();
+
+    // Generate the 30-Day JWT "Wristband"
+    var tokenHandler = new JwtSecurityTokenHandler();
+    var key = Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:SecretKey"]!);
+    var tokenDescriptor = new SecurityTokenDescriptor
+    {
+        Subject = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.MobilePhone, user.PhoneNumber)
+        }),
+        Expires = DateTime.UtcNow.AddDays(30), // Keeps them logged in for a month
+        Issuer = builder.Configuration["JwtSettings:Issuer"],
+        Audience = builder.Configuration["JwtSettings:Audience"],
+        SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+    };
+
+    var token = tokenHandler.CreateToken(tokenDescriptor);
+    var jwtString = tokenHandler.WriteToken(token);
+
+    // Send the token back to React
+    return Results.Ok(new { token = jwtString });
+});
+
 app.Run();
 
 // --- REQUEST RECORDS ---
@@ -208,3 +292,4 @@ public record CreateExerciseRequest(
 // DTOs for Bulk Import
 public record BulkImportSession(DateTime Date, string Notes, List<BulkImportSet> Sets);
 public record BulkImportSet(string ExerciseName, decimal Weight, int Reps, int? TargetReps, bool IsDropSet, string Unit);
+public record AuthRequest(string PhoneNumber, string Password);

@@ -12,8 +12,8 @@ using WorkoutTracker.Models;
 namespace WorkoutTracker.Migrations
 {
     [DbContext(typeof(WorkoutDBContext))]
-    [Migration("20260324152802_updatemig1")]
-    partial class updatemig1
+    [Migration("20260327223941_UserMigration")]
+    partial class UserMigration
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -214,6 +214,14 @@ namespace WorkoutTracker.Migrations
                         },
                         new
                         {
+                            Id = 32,
+                            MuscleGroup = "Shoulders",
+                            Name = "Shoulder Press Machine",
+                            Type = 1,
+                            WeightIncrement = 5m
+                        },
+                        new
+                        {
                             Id = 21,
                             MuscleGroup = "Chest",
                             Name = "Barbell Bench Press",
@@ -249,6 +257,14 @@ namespace WorkoutTracker.Migrations
                             Id = 25,
                             MuscleGroup = "Chest",
                             Name = "Dumbbell Bench Press",
+                            Type = 1,
+                            WeightIncrement = 5m
+                        },
+                        new
+                        {
+                            Id = 31,
+                            MuscleGroup = "Chest",
+                            Name = "Incline Dumbbell Press",
                             Type = 1,
                             WeightIncrement = 5m
                         },
@@ -294,6 +310,27 @@ namespace WorkoutTracker.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WorkoutTracker.Models.User", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Users");
+                });
+
             modelBuilder.Entity("WorkoutTracker.Models.WorkoutSession", b =>
                 {
                     b.Property<int>("Id")
@@ -311,7 +348,12 @@ namespace WorkoutTracker.Migrations
                     b.Property<string>("OverallNotes")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("Sessions");
                 });
@@ -362,6 +404,17 @@ namespace WorkoutTracker.Migrations
                     b.ToTable("Sets");
                 });
 
+            modelBuilder.Entity("WorkoutTracker.Models.WorkoutSession", b =>
+                {
+                    b.HasOne("WorkoutTracker.Models.User", "User")
+                        .WithMany("Sessions")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("WorkoutTracker.Models.WorkoutSet", b =>
                 {
                     b.HasOne("WorkoutTracker.Models.Exercise", "Exercise")
@@ -384,6 +437,11 @@ namespace WorkoutTracker.Migrations
             modelBuilder.Entity("WorkoutTracker.Models.Exercise", b =>
                 {
                     b.Navigation("Sets");
+                });
+
+            modelBuilder.Entity("WorkoutTracker.Models.User", b =>
+                {
+                    b.Navigation("Sessions");
                 });
 
             modelBuilder.Entity("WorkoutTracker.Models.WorkoutSession", b =>
