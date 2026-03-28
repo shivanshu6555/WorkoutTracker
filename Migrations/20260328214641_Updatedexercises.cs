@@ -8,27 +8,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace WorkoutTracker.Migrations
 {
     /// <inheritdoc />
-    public partial class UserMigration : Migration
+    public partial class Updatedexercises : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.CreateTable(
-                name: "Exercises",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Type = table.Column<int>(type: "int", nullable: false),
-                    MuscleGroup = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    WeightIncrement = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Exercises", x => x.Id);
-                });
-
             migrationBuilder.CreateTable(
                 name: "Users",
                 columns: table => new
@@ -41,6 +25,28 @@ namespace WorkoutTracker.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Users", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Exercises",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Type = table.Column<int>(type: "int", nullable: false),
+                    MuscleGroup = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    WeightIncrement = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    UserId = table.Column<int>(type: "int", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Exercises", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Exercises_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -100,42 +106,47 @@ namespace WorkoutTracker.Migrations
 
             migrationBuilder.InsertData(
                 table: "Exercises",
-                columns: new[] { "Id", "MuscleGroup", "Name", "Type", "WeightIncrement" },
+                columns: new[] { "Id", "MuscleGroup", "Name", "Type", "UserId", "WeightIncrement" },
                 values: new object[,]
                 {
-                    { 1, "Back", "Pull Up", 2, 0m },
-                    { 2, "Back", "Lat Pulldown", 1, 5m },
-                    { 3, "Back", "Seated Cable Row", 1, 5m },
-                    { 4, "Back", "Barbell Bent-Over Row", 1, 5m },
-                    { 5, "Back", "T-Bar Row", 1, 5m },
-                    { 6, "Back", "Dumbbell Row", 1, 5m },
-                    { 7, "Biceps", "Barbell Bicep Curl", 1, 5m },
-                    { 8, "Biceps", "Preacher Curl", 1, 2.5m },
-                    { 9, "Biceps", "Cable Reverse Curl", 1, 2.5m },
-                    { 10, "Biceps", "Dumbbell Hammer Curl", 1, 5m },
-                    { 11, "Biceps", "Incline Dumbbell Curl", 1, 5m },
-                    { 12, "Legs", "Smith Machine Squat", 1, 5m },
-                    { 13, "Legs", "Seated Leg Curl", 1, 5m },
-                    { 14, "Legs", "Leg Extension", 1, 5m },
-                    { 15, "Legs", "Standing Calf Raise", 1, 5m },
-                    { 16, "Legs", "Leg Press", 1, 10m },
-                    { 17, "Shoulders", "Dumbbell Shoulder Press", 1, 5m },
-                    { 18, "Shoulders", "Rear Delt Fly", 1, 2.5m },
-                    { 19, "Shoulders", "Cable Face Pull", 1, 2.5m },
-                    { 20, "Shoulders", "Dumbbell Shrug", 1, 5m },
-                    { 21, "Chest", "Barbell Bench Press", 1, 5m },
-                    { 22, "Chest", "Smith Machine Incline Press", 1, 5m },
-                    { 23, "Chest", "Decline Chest Press Machine", 1, 5m },
-                    { 24, "Chest", "Pec Deck Fly", 1, 5m },
-                    { 25, "Chest", "Dumbbell Bench Press", 1, 5m },
-                    { 26, "Triceps", "Cable Overhead Tricep Extension", 1, 2.5m },
-                    { 27, "Triceps", "Cable Tricep Pushdown", 1, 2.5m },
-                    { 28, "Triceps", "Dumbbell Tricep Kickback", 1, 2.5m },
-                    { 29, "Core", "Machine Crunch", 1, 5m },
-                    { 30, "Core", "Hanging Leg Raise", 2, 0m },
-                    { 31, "Chest", "Incline Dumbbell Press", 1, 5m },
-                    { 32, "Shoulders", "Shoulder Press Machine", 1, 5m }
+                    { 1, "Back", "Pull Up", 2, null, 0m },
+                    { 2, "Back", "Lat Pulldown", 1, null, 5m },
+                    { 3, "Back", "Seated Cable Row", 1, null, 5m },
+                    { 4, "Back", "Barbell Bent-Over Row", 1, null, 5m },
+                    { 5, "Back", "T-Bar Row", 1, null, 5m },
+                    { 6, "Back", "Dumbbell Row", 1, null, 5m },
+                    { 7, "Biceps", "Barbell Bicep Curl", 1, null, 5m },
+                    { 8, "Biceps", "Preacher Curl", 1, null, 2.5m },
+                    { 9, "Biceps", "Cable Reverse Curl", 1, null, 2.5m },
+                    { 10, "Biceps", "Dumbbell Hammer Curl", 1, null, 5m },
+                    { 11, "Biceps", "Incline Dumbbell Curl", 1, null, 5m },
+                    { 12, "Legs", "Smith Machine Squat", 1, null, 5m },
+                    { 13, "Legs", "Seated Leg Curl", 1, null, 5m },
+                    { 14, "Legs", "Leg Extension", 1, null, 5m },
+                    { 15, "Legs", "Standing Calf Raise", 1, null, 5m },
+                    { 16, "Legs", "Leg Press", 1, null, 10m },
+                    { 17, "Shoulders", "Dumbbell Shoulder Press", 1, null, 5m },
+                    { 18, "Shoulders", "Rear Delt Fly", 1, null, 2.5m },
+                    { 19, "Shoulders", "Cable Face Pull", 1, null, 2.5m },
+                    { 20, "Shoulders", "Dumbbell Shrug", 1, null, 5m },
+                    { 21, "Chest", "Barbell Bench Press", 1, null, 5m },
+                    { 22, "Chest", "Smith Machine Incline Press", 1, null, 5m },
+                    { 23, "Chest", "Decline Chest Press Machine", 1, null, 5m },
+                    { 24, "Chest", "Pec Deck Fly", 1, null, 5m },
+                    { 25, "Chest", "Dumbbell Bench Press", 1, null, 5m },
+                    { 26, "Triceps", "Cable Overhead Tricep Extension", 1, null, 2.5m },
+                    { 27, "Triceps", "Cable Tricep Pushdown", 1, null, 2.5m },
+                    { 28, "Triceps", "Dumbbell Tricep Kickback", 1, null, 2.5m },
+                    { 29, "Core", "Machine Crunch", 1, null, 5m },
+                    { 30, "Core", "Hanging Leg Raise", 2, null, 0m },
+                    { 31, "Chest", "Incline Dumbbell Press", 1, null, 5m },
+                    { 32, "Shoulders", "Shoulder Press Machine", 1, null, 5m }
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Exercises_UserId",
+                table: "Exercises",
+                column: "UserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Sessions_UserId",

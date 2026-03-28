@@ -45,50 +45,75 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseAuthorization();
-app.MapControllers();
-app.UseAuthentication(); // NEW
-app.UseAuthorization();  // NEW
-app.UseCors();
+app.UseCors();           // 1. Let the browser in
+app.UseAuthentication(); // 2. Check their JWT wristband
+app.UseAuthorization();  // 3. Verify their permissions
+app.MapControllers();    // 4. Send them to the endpoint
+
 
 var api = app.MapGroup("/api");
 
-// 1. Get all exercises
-api.MapGet("/exercises", async (WorkoutDBContext db) =>
+// 1. Get all exercises (Global + User's Custom Exercises)
+api.MapGet("/exercises", async (ClaimsPrincipal user, WorkoutDBContext db) =>
 {
-    return await db.Exercises.AsNoTracking().ToListAsync();
-});
+    // Grab the user ID from their JWT token
+    var userIdString = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    if (userIdString == null) return Results.Unauthorized();
 
-// NEW: Add a custom exercise
-api.MapPost("/exercises", async (CreateExerciseRequest req, WorkoutDBContext db) =>
+    int userId = int.Parse(userIdString);
+
+    // Give them the default exercises (UserId == null) PLUS their own custom ones
+    var exercises = await db.Exercises
+        .AsNoTracking()
+        .Where(e => e.UserId == null || e.UserId == userId)
+        .ToListAsync();
+
+    return Results.Ok(exercises);
+}).RequireAuthorization(); // <--- Secure this!
+
+
+// 2. Add a custom exercise
+api.MapPost("/exercises", async (CreateExerciseRequest req, ClaimsPrincipal user, WorkoutDBContext db) =>
 {
+    var userIdString = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    if (userIdString == null) return Results.Unauthorized();
+
     var exercise = new Exercise
     {
         Name = req.Name,
         MuscleGroup = req.MuscleGroup,
         WeightIncrement = req.WeightIncrement,
-        Type = ExerciseType.Weighted // Defaulting custom exercises to Weighted
+        Type = ExerciseType.Weighted,
+        UserId = int.Parse(userIdString) // <--- Lock this exercise to this exact user
     };
 
     db.Exercises.Add(exercise);
     await db.SaveChangesAsync();
 
     return Results.Ok(exercise);
-});
+}).RequireAuthorization();
 
 // 2. Start a new workout session
-api.MapPost("/sessions", async (StartSessionRequest req, WorkoutDBContext db) =>
+api.MapPost("/sessions", async (StartSessionRequest req, ClaimsPrincipal user, WorkoutDBContext db) =>
 {
-    var session = new WorkoutSession
+    // 1. Inspect the wristband and grab the User ID
+    var userIdString = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+    // If they don't have a valid wristband, kick them out
+    if (userIdString == null) return Results.Unauthorized();
+
+    // 2. Create the session tied directly to this specific user
+    var newSession = new WorkoutSession
     {
-        Date = DateTime.UtcNow,
-        OverallNotes = req.OverallNotes
+        UserId = int.Parse(userIdString),
+        OverallNotes = req.OverallNotes, // Use the safe record here!
+        Date = DateTime.UtcNow
     };
 
-    db.Sessions.Add(session);
+    db.Sessions.Add(newSession);
     await db.SaveChangesAsync();
 
-    return Results.Created($"/api/sessions/{session.Id}", session);
+    return Results.Ok(newSession);
 }).RequireAuthorization();
 
 // 3. Log a set
@@ -117,11 +142,16 @@ api.MapPost("/sessions/{sessionId:int}/sets", async (int sessionId, LogSetReques
     return Results.Ok(newSet);
 }).RequireAuthorization();
 
-// 4. Get last session's sets for an exercise
-api.MapGet("/exercises/{exerciseId:int}/history", async (int exerciseId, WorkoutDBContext db) =>
+// 4. Get last session's sets for an exercise (SECURED)
+api.MapGet("/exercises/{exerciseId:int}/history", async (int exerciseId, ClaimsPrincipal user, WorkoutDBContext db) =>
 {
+    var userIdString = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    if (userIdString == null) return Results.Unauthorized();
+    int userId = int.Parse(userIdString);
+
     var lastSessionWithExercise = await db.Sets
-        .Where(s => s.ExerciseId == exerciseId)
+        // FIX: Ensure the set belongs to a session owned by THIS user!
+        .Where(s => s.ExerciseId == exerciseId && s.Session.UserId == userId)
         .OrderByDescending(s => s.Session.Date)
         .Select(s => s.WorkoutSessionId)
         .FirstOrDefaultAsync();
@@ -138,19 +168,23 @@ api.MapGet("/exercises/{exerciseId:int}/history", async (int exerciseId, Workout
             s.TargetReps,
             s.IsDropSet,
             Unit = s.Unit,
-            Date = s.Session.Date // Magically pulls the date from the parent Session table!
+            Date = s.Session.Date
         })
         .ToListAsync();
 
     return Results.Ok(previousSets);
-});
+}).RequireAuthorization(); // <--- Secured!
 
-// 5. Get Progression Analytics (Total Volume over time)
-api.MapGet("/exercises/{exerciseId:int}/progression", async (int exerciseId, WorkoutDBContext db) =>
+// 5. Get Progression Analytics (SECURED)
+api.MapGet("/exercises/{exerciseId:int}/progression", async (int exerciseId, ClaimsPrincipal user, WorkoutDBContext db) =>
 {
-    // Step 1: Do the heavy lifting in SQL (Grouping, Summing, Sorting)
+    var userIdString = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    if (userIdString == null) return Results.Unauthorized();
+    int userId = int.Parse(userIdString);
+
     var rawStats = await db.Sets
-        .Where(s => s.ExerciseId == exerciseId && s.Weight > 0)
+        // FIX: Ensure we only calculate volume for THIS user!
+        .Where(s => s.ExerciseId == exerciseId && s.Session.UserId == userId && s.Weight > 0)
         .GroupBy(s => s.Session.Date.Date)
         .Select(g => new {
             RawDate = g.Key,
@@ -158,16 +192,15 @@ api.MapGet("/exercises/{exerciseId:int}/progression", async (int exerciseId, Wor
         })
         .OrderBy(s => s.RawDate)
         .Take(10)
-        .ToListAsync(); // <-- This executes the SQL query and brings data into C# memory
+        .ToListAsync();
 
-    // Step 2: Format the string in C# memory where .ToString() works perfectly
     var formattedStats = rawStats.Select(s => new {
         Date = s.RawDate.ToString("MMM dd"),
         TotalVolume = s.TotalVolume
     }).ToList();
 
     return Results.Ok(formattedStats);
-});
+}).RequireAuthorization(); // <--- Secured!
 
 // 6. Bulk Import Historical Data
 api.MapPost("/import-history", async (List<BulkImportSession> history, WorkoutDBContext db) =>

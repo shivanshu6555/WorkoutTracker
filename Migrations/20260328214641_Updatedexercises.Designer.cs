@@ -12,8 +12,8 @@ using WorkoutTracker.Models;
 namespace WorkoutTracker.Migrations
 {
     [DbContext(typeof(WorkoutDBContext))]
-    [Migration("20260327223941_UserMigration")]
-    partial class UserMigration
+    [Migration("20260328214641_Updatedexercises")]
+    partial class Updatedexercises
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -44,10 +44,15 @@ namespace WorkoutTracker.Migrations
                     b.Property<int>("Type")
                         .HasColumnType("int");
 
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("WeightIncrement")
                         .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("Exercises");
 
@@ -402,6 +407,15 @@ namespace WorkoutTracker.Migrations
                     b.HasIndex("WorkoutSessionId");
 
                     b.ToTable("Sets");
+                });
+
+            modelBuilder.Entity("WorkoutTracker.Models.Exercise", b =>
+                {
+                    b.HasOne("WorkoutTracker.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("WorkoutTracker.Models.WorkoutSession", b =>
