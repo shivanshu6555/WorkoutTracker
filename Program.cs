@@ -53,23 +53,36 @@ app.MapControllers();    // 4. Send them to the endpoint
 
 var api = app.MapGroup("/api");
 
-// 1. Get all exercises (Global + User's Custom Exercises)
+// 1. Get all exercises (With User Overrides applied!)
 api.MapGet("/exercises", async (ClaimsPrincipal user, WorkoutDBContext db) =>
 {
-    // Grab the user ID from their JWT token
     var userIdString = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
     if (userIdString == null) return Results.Unauthorized();
-
     int userId = int.Parse(userIdString);
 
-    // Give them the default exercises (UserId == null) PLUS their own custom ones
-    var exercises = await db.Exercises
-        .AsNoTracking()
+    // Grab the exercises (Global + Custom)
+    var exercises = await db.Exercises.AsNoTracking()
         .Where(e => e.UserId == null || e.UserId == userId)
         .ToListAsync();
 
-    return Results.Ok(exercises);
-}).RequireAuthorization(); // <--- Secure this!
+    // Grab any specific machine overrides this user has set
+    var overrides = await db.UserExerciseSettings.AsNoTracking()
+        .Where(s => s.UserId == userId)
+        .ToDictionaryAsync(s => s.ExerciseId, s => s.WeightIncrement);
+
+    // Merge them together seamlessly
+    var customizedExercises = exercises.Select(e => new {
+        e.Id,
+        e.Name,
+        e.MuscleGroup,
+        e.Type,
+        e.UserId,
+        // If they have an override, use it! Otherwise, stick to the default.
+        WeightIncrement = overrides.ContainsKey(e.Id) ? overrides[e.Id] : e.WeightIncrement
+    });
+
+    return Results.Ok(customizedExercises);
+}).RequireAuthorization();
 
 
 // 2. Add a custom exercise
@@ -243,6 +256,77 @@ api.MapPost("/import-history", async (List<BulkImportSession> history, WorkoutDB
     return Results.Ok($"Successfully imported {history.Count} sessions and {setsImported} sets!");
 });
 
+// NEW: Update Weight Increment
+api.MapPut("/exercises/{id:int}/increment", async (int id, UpdateIncrementRequest req, ClaimsPrincipal user, WorkoutDBContext db) =>
+{
+    var userIdString = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    if (userIdString == null) return Results.Unauthorized();
+    int userId = int.Parse(userIdString);
+
+    var exercise = await db.Exercises.FindAsync(id);
+    if (exercise == null) return Results.NotFound();
+
+    // If it's their own custom exercise, just update the main table directly
+    if (exercise.UserId == userId)
+    {
+        exercise.WeightIncrement = req.NewIncrement;
+    }
+    else
+    {
+        // If it's a global exercise, save an override for this user only
+        var setting = await db.UserExerciseSettings
+            .FirstOrDefaultAsync(s => s.UserId == userId && s.ExerciseId == id);
+
+        if (setting != null)
+        {
+            setting.WeightIncrement = req.NewIncrement; // Update existing override
+        }
+        else
+        {
+            // Create a brand new override
+            db.UserExerciseSettings.Add(new UserExerciseSetting
+            {
+                UserId = userId,
+                ExerciseId = id,
+                WeightIncrement = req.NewIncrement
+            });
+        }
+    }
+
+    await db.SaveChangesAsync();
+    return Results.Ok(new { message = "Increment updated successfully!" });
+}).RequireAuthorization();
+
+// 6. Get Full Master History (Grouped by Session/Date)
+api.MapGet("/history", async (ClaimsPrincipal user, WorkoutDBContext db) =>
+{
+    var userIdString = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    if (userIdString == null) return Results.Unauthorized();
+    int userId = int.Parse(userIdString);
+
+    var history = await db.Sessions
+        .AsNoTracking()
+        .Where(s => s.UserId == userId)
+        // Bring the newest workouts to the top
+        .OrderByDescending(s => s.Date)
+        .Select(s => new {
+            s.Id,
+            Date = s.Date,
+            s.OverallNotes,
+            // Grab every set in this session and get the actual Exercise Name
+            Sets = s.Sets.OrderBy(set => set.SetOrder).Select(set => new {
+                ExerciseName = set.Exercise.Name,
+                MuscleGroup = set.Exercise.MuscleGroup,
+                set.Weight,
+                set.Reps,
+                set.IsDropSet,
+                set.Unit
+            })
+        })
+        .ToListAsync();
+
+    return Results.Ok(history);
+}).RequireAuthorization();
 // Define the shape of the login request
 
 // 1. REGISTER ENDPOINT
@@ -327,3 +411,4 @@ public record CreateExerciseRequest(
 public record BulkImportSession(DateTime Date, string Notes, List<BulkImportSet> Sets);
 public record BulkImportSet(string ExerciseName, decimal Weight, int Reps, int? TargetReps, bool IsDropSet, string Unit);
 public record AuthRequest(string PhoneNumber, string Password);
+public record UpdateIncrementRequest(decimal NewIncrement);
